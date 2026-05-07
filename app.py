@@ -47,6 +47,18 @@ def fetch_weather(city):
     except:
         return None
 
+# -------------------------
+# Soil Data Mapping
+# -------------------------
+def get_soil_data(location):
+    soil_map = {
+        "Delhi": {"N": 60, "P": 40, "K": 40, "ph": 7.2},
+        "Punjab": {"N": 90, "P": 40, "K": 40, "ph": 6.5},
+        "Haryana": {"N": 80, "P": 35, "K": 35, "ph": 7.0},
+        "Maharashtra": {"N": 70, "P": 50, "K": 50, "ph": 6.8}
+    }
+    return soil_map.get(location, {"N": 40, "P": 40, "K": 40, "ph": 7.0})
+
 
 # -------------------------
 # UI CSS
@@ -115,19 +127,31 @@ col1, col2 = st.columns(2)
 
 with col1:
 
-    st.subheader("🌱 Soil Nutrients")
+   st.subheader("🌱 Soil Nutrients")
 
+soil = get_soil_data(location)
+
+use_auto = st.checkbox("Use Auto Soil Data", value=True)
+
+if use_auto:
+    N = st.number_input("Nitrogen (N)", 0, 200, soil["N"])
+    P = st.number_input("Phosphorus (P)", 0, 200, soil["P"])
+    K = st.number_input("Potassium (K)", 0, 200, soil["K"])
+    ph = st.number_input("Soil pH", 0.0, 14.0, soil["ph"])
+else:
     N = st.number_input("Nitrogen (N)", 0, 200, 40)
     P = st.number_input("Phosphorus (P)", 0, 200, 40)
     K = st.number_input("Potassium (K)", 0, 200, 40)
-
     ph = st.number_input("Soil pH", 0.0, 14.0, 7.0)
 
 with col2:
 
     st.subheader("🌍 Location")
 
-    location = st.text_input("Enter city (example: Delhi, Indore, Jaipur)", "Delhi")
+   location = st.selectbox(
+    "Select Location",
+    ["Delhi", "Punjab", "Haryana", "Maharashtra"]
+)
 
 predict = st.button("🚀 Predict Optimal Crop")
 
@@ -139,9 +163,11 @@ if predict:
 
     weather = fetch_weather(location)
 
-    if weather:
-
-        temp, humidity, rainfall = weather
+if weather:
+    temp, humidity, rainfall = weather
+else:
+    st.warning("Using default weather values")
+    temp, humidity, rainfall = 25, 60, 100
 
         # Weather Card
         st.markdown(f"""
