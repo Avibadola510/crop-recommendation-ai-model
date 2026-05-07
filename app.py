@@ -21,11 +21,17 @@ def load_models():
 
     metadata = joblib.load("models/metadata.pkl")
 
-    return crop_model, crop_encoder, fert_model, fert_encoder, fert_crop_encoder, metadata
+    return (
+        crop_model,
+        crop_encoder,
+        fert_model,
+        fert_encoder,
+        fert_crop_encoder,
+        metadata,
+    )
 
 
 crop_model, crop_encoder, fert_model, fert_encoder, fert_crop_encoder, metadata = load_models()
-
 
 # -------------------------
 # Weather API
@@ -36,7 +42,7 @@ def fetch_weather(city):
 
         url = f"http://api.weatherapi.com/v1/current.json?key={api_key}&q={city}"
 
-        response = requests.get(url).json()
+        response = requests.get(url, timeout=5).json()
 
         temp = response["current"]["temp_c"]
         humidity = response["current"]["humidity"]
@@ -44,8 +50,10 @@ def fetch_weather(city):
 
         return temp, humidity, rainfall
 
-    except:
+    except Exception as e:
+        st.error(f"Weather API Error: {e}")
         return None
+
 
 # -------------------------
 # Soil Data Mapping
@@ -55,15 +63,17 @@ def get_soil_data(location):
         "Delhi": {"N": 60, "P": 40, "K": 40, "ph": 7.2},
         "Punjab": {"N": 90, "P": 40, "K": 40, "ph": 6.5},
         "Haryana": {"N": 80, "P": 35, "K": 35, "ph": 7.0},
-        "Maharashtra": {"N": 70, "P": 50, "K": 50, "ph": 6.8}
+        "Maharashtra": {"N": 70, "P": 50, "K": 50, "ph": 6.8},
     }
+
     return soil_map.get(location, {"N": 40, "P": 40, "K": 40, "ph": 7.0})
 
 
 # -------------------------
 # UI CSS
 # -------------------------
-st.markdown("""
+st.markdown(
+    """
 <style>
 
 .stApp{
@@ -108,12 +118,17 @@ color:gray;
 }
 
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # -------------------------
 # Header
 # -------------------------
-st.markdown('<div class="main-title">🌾 AgriIntel AI</div>', unsafe_allow_html=True)
+st.markdown(
+    '<div class="main-title">🌾 AgriIntel AI</div>',
+    unsafe_allow_html=True,
+)
 
 st.markdown("### Smart Crop & Fertilizer Recommendation System")
 
@@ -125,33 +140,31 @@ st.divider()
 
 col1, col2 = st.columns(2)
 
-with col1:
+with col2:
+    st.subheader("🌍 Location")
 
-   st.subheader("🌱 Soil Nutrients")
+    location = st.selectbox(
+        "Select Location",
+        ["Delhi", "Punjab", "Haryana", "Maharashtra"],
+    )
 
 soil = get_soil_data(location)
 
-use_auto = st.checkbox("Use Auto Soil Data", value=True)
+with col1:
+    st.subheader("🌱 Soil Nutrients")
 
-if use_auto:
-    N = st.number_input("Nitrogen (N)", 0, 200, soil["N"])
-    P = st.number_input("Phosphorus (P)", 0, 200, soil["P"])
-    K = st.number_input("Potassium (K)", 0, 200, soil["K"])
-    ph = st.number_input("Soil pH", 0.0, 14.0, soil["ph"])
-else:
-    N = st.number_input("Nitrogen (N)", 0, 200, 40)
-    P = st.number_input("Phosphorus (P)", 0, 200, 40)
-    K = st.number_input("Potassium (K)", 0, 200, 40)
-    ph = st.number_input("Soil pH", 0.0, 14.0, 7.0)
+    use_auto = st.checkbox("Use Auto Soil Data", value=True)
 
-with col2:
-
-    st.subheader("🌍 Location")
-
-   location = st.selectbox(
-    "Select Location",
-    ["Delhi", "Punjab", "Haryana", "Maharashtra"]
-)
+    if use_auto:
+        N = st.number_input("Nitrogen (N)", 0, 200, soil["N"])
+        P = st.number_input("Phosphorus (P)", 0, 200, soil["P"])
+        K = st.number_input("Potassium (K)", 0, 200, soil["K"])
+        ph = st.number_input("Soil pH", 0.0, 14.0, soil["ph"])
+    else:
+        N = st.number_input("Nitrogen (N)", 0, 200, 40)
+        P = st.number_input("Phosphorus (P)", 0, 200, 40)
+        K = st.number_input("Potassium (K)", 0, 200, 40)
+        ph = st.number_input("Soil pH", 0.0, 14.0, 7.0)
 
 predict = st.button("🚀 Predict Optimal Crop")
 
@@ -163,14 +176,12 @@ if predict:
 
     weather = fetch_weather(location)
 
-if weather:
-    temp, humidity, rainfall = weather
-else:
-    st.warning("Using default weather values")
-    temp, humidity, rainfall = 25, 60, 100
+    if weather:
+        temp, humidity, rainfall = weather
 
         # Weather Card
-        st.markdown(f"""
+        st.markdown(
+            f"""
         <div class="weather-card">
 
         <h3 style="text-align:center">🌤 Live Weather</h3>
@@ -195,11 +206,13 @@ else:
         </div>
 
         </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
     else:
-        st.error("Weather fetch failed. Check city name or API key.")
-
+        st.warning("Using default weather values")
+        temp, humidity, rainfall = 25, 60, 100
 
     # -------------------------
     # Crop Prediction
@@ -221,8 +234,7 @@ else:
 
         st.progress(float(conf))
 
-        st.write(f"**{crop} — {conf*100:.2f}% confidence**")
-
+        st.write(f"**{crop} — {conf * 100:.2f}% confidence**")
 
     # -------------------------
     # Fertilizer Prediction
@@ -230,7 +242,9 @@ else:
 
     crop_encoded = fert_crop_encoder.transform([top3_crops[0]])[0]
 
-    fert_input = np.array([[N, P, K, temp, humidity, rainfall, crop_encoded]])
+    fert_input = np.array(
+        [[N, P, K, temp, humidity, rainfall, crop_encoded]]
+    )
 
     fert_probs = fert_model.predict_proba(fert_input)[0]
 
@@ -242,8 +256,9 @@ else:
 
     st.subheader("💊 Recommended Fertilizer")
 
-    st.success(f"{fert_label} — {fert_conf*100:.2f}% confidence")
-
+    st.success(
+        f"{fert_label} — {fert_conf * 100:.2f}% confidence"
+    )
 
     # -------------------------
     # Feature Importance
@@ -251,24 +266,30 @@ else:
 
     st.subheader("📊 Feature Importance")
 
-    importances = crop_model.calibrated_classifiers_[0].estimator.feature_importances_
+    try:
+        importances = (
+            crop_model.calibrated_classifiers_[0]
+            .estimator.feature_importances_
+        )
 
-    importance_df = pd.DataFrame({
+        importance_df = pd.DataFrame(
+            {
+                "Feature": metadata["crop_features"],
+                "Importance": importances,
+            }
+        ).sort_values(by="Importance", ascending=False)
 
-        "Feature": metadata["crop_features"],
-        "Importance": importances
+        fig = px.bar(
+            importance_df,
+            x="Feature",
+            y="Importance",
+            color="Importance",
+        )
 
-    }).sort_values(by="Importance", ascending=False)
+        st.plotly_chart(fig, use_container_width=True)
 
-    fig = px.bar(
-        importance_df,
-        x="Feature",
-        y="Importance",
-        color="Importance"
-    )
-
-    st.plotly_chart(fig, width="stretch")
-
+    except Exception as e:
+        st.warning(f"Feature importance unavailable: {e}")
 
 # -------------------------
 # Footer
@@ -276,4 +297,6 @@ else:
 
 st.divider()
 
-st.caption("AgriIntel AI • Crop & Fertilizer Recommendation System • Powered by Machine Learning")
+st.caption(
+    "AgriIntel AI • Crop & Fertilizer Recommendation System • Powered by Machine Learning"
+)
