@@ -5,20 +5,14 @@ import pandas as pd
 import requests
 import plotly.express as px
 
-# ---------------------------------------------------
-# PAGE CONFIG
-# ---------------------------------------------------
-st.set_page_config(
-    page_title="AgriIntel AI",
-    layout="wide"
-)
+st.set_page_config(page_title="AgriIntel AI", layout="wide")
 
 # ---------------------------------------------------
-# LOAD MODELS
+# Load Models
 # ---------------------------------------------------
+
 @st.cache_resource
 def load_models():
-
     crop_model = joblib.load("models/crop_model.pkl")
     crop_encoder = joblib.load("models/crop_encoder.pkl")
 
@@ -34,7 +28,7 @@ def load_models():
         fert_model,
         fert_encoder,
         fert_crop_encoder,
-        metadata
+        metadata,
     )
 
 
@@ -44,23 +38,27 @@ def load_models():
     fert_model,
     fert_encoder,
     fert_crop_encoder,
-    metadata
+    metadata,
 ) = load_models()
 
 # ---------------------------------------------------
-# WEATHER API
+# Weather API
 # ---------------------------------------------------
-def fetch_weather(city):
 
+def fetch_weather(location):
     try:
         api_key = st.secrets["weather_api"]
 
         url = (
-            f"http://api.weatherapi.com/v1/current.json?"
-            f"key={api_key}&q={city}"
+            f"http://api.weatherapi.com/v1/current.json"
+            f"?key={api_key}&q={location}"
         )
 
-        response = requests.get(url).json()
+        response = requests.get(url, timeout=10).json()
+
+        if "current" not in response:
+            st.error("Invalid location or Weather API issue.")
+            return None
 
         temp = response["current"]["temp_c"]
         humidity = response["current"]["humidity"]
@@ -68,91 +66,68 @@ def fetch_weather(city):
 
         return temp, humidity, rainfall
 
-    except:
+    except Exception as e:
+        st.error(f"Weather API Error: {e}")
         return None
 
 
 # ---------------------------------------------------
-# SMART SOIL ESTIMATION
+# Generic Soil Data
 # ---------------------------------------------------
-def get_soil_data(temp, humidity, rainfall):
 
-    if rainfall > 200:
-
-        N = 90
-        P = 45
-        K = 45
-        ph = 6.5
-
-    elif rainfall > 100:
-
-        N = 70
-        P = 40
-        K = 40
-        ph = 6.8
-
-    else:
-
-        N = 50
-        P = 35
-        K = 35
-        ph = 7.2
-
+def get_default_soil_data():
     return {
-        "N": N,
-        "P": P,
-        "K": K,
-        "ph": ph
+        "N": 50,
+        "P": 40,
+        "K": 40,
+        "ph": 6.8,
     }
 
 
+soil = get_default_soil_data()
+
 # ---------------------------------------------------
-# CUSTOM CSS
+# CSS
 # ---------------------------------------------------
-st.markdown("""
+
+st.markdown(
+    """
 <style>
 
 .stApp{
-background-color:#f5f7fa;
-font-family:'Segoe UI', sans-serif;
-}
-
-.block-container{
-padding-top:2rem;
-padding-bottom:2rem;
-padding-left:4rem;
-padding-right:4rem;
+background:
+linear-gradient(rgba(255,255,255,0.92), rgba(255,255,255,0.92)),
+url("https://images.unsplash.com/photo-1500937386664-56d1dfef3854");
+background-size: cover;
 }
 
 .main-title{
-font-size:42px;
-font-weight:700;
+font-size:48px;
+font-weight:800;
 text-align:center;
-color:#111827;
+color:#1b4332;
 margin-bottom:10px;
 }
 
-.sub-title{
+.subtitle{
 text-align:center;
-font-size:18px;
-color:#6b7280;
-margin-bottom:40px;
+font-size:20px;
+margin-bottom:20px;
+color:#444;
 }
 
-.card{
+.weather-card{
 background:white;
 padding:25px;
-border-radius:14px;
-border:1px solid #e5e7eb;
-box-shadow:0 4px 10px rgba(0,0,0,0.04);
-margin-bottom:20px;
+border-radius:15px;
+box-shadow:0 10px 30px rgba(0,0,0,0.08);
+margin-top:20px;
 }
 
 .weather-grid{
 display:flex;
 justify-content:space-around;
 text-align:center;
-margin-top:20px;
 }
 
 .weather-box{
@@ -161,313 +136,262 @@ padding:10px;
 
 .weather-value{
 font-size:28px;
-font-weight:700;
-color:#111827;
+font-weight:bold;
+color:#1b4332;
 }
 
 .weather-label{
 font-size:14px;
-color:#6b7280;
-}
-
-.stButton > button{
-width:100%;
-background:#111827;
-color:white;
-padding:14px;
-font-size:16px;
-font-weight:600;
-border:none;
-border-radius:10px;
-transition:0.3s;
-}
-
-.stButton > button:hover{
-background:#374151;
-}
-
-input{
-border-radius:8px !important;
+color:gray;
 }
 
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # ---------------------------------------------------
-# HEADER
+# Header
 # ---------------------------------------------------
+
 st.markdown(
     '<div class="main-title">AgriIntel AI</div>',
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
 
 st.markdown(
-    '<div class="sub-title">'
-    'Crop and Fertilizer Recommendation System'
-    '</div>',
-    unsafe_allow_html=True
+    '<div class="subtitle">Smart Crop and Fertilizer Recommendation System</div>',
+    unsafe_allow_html=True,
 )
 
 st.divider()
 
 # ---------------------------------------------------
-# INPUT SECTION
+# Input Section
 # ---------------------------------------------------
+
 col1, col2 = st.columns(2)
 
-with col1:
+with col2:
 
     st.subheader("Location")
 
     location = st.text_input(
-        "Enter City or District",
-        placeholder="Delhi, Jaipur, Pune, Lucknow"
+        "Enter State, City, Town or Village",
+        placeholder="Example: Delhi, Jaipur, Ludhiana, Pune, Meerut",
     )
 
-with col2:
+with col1:
 
-    st.subheader("Prediction Settings")
+    st.subheader("Soil Nutrients")
 
-    use_manual = st.checkbox(
-        "Manually Edit Soil Values",
-        value=False
-    )
+    use_auto = st.checkbox("Use Default Soil Values", value=True)
 
-# ---------------------------------------------------
-# PREDICT BUTTON
-# ---------------------------------------------------
-predict = st.button("Predict Crop")
+    if use_auto:
 
-# ---------------------------------------------------
-# MAIN PREDICTION
-# ---------------------------------------------------
-if predict:
+        N = st.number_input(
+            "Nitrogen (N)",
+            min_value=0,
+            max_value=200,
+            value=soil["N"],
+        )
 
-    if not location:
+        P = st.number_input(
+            "Phosphorus (P)",
+            min_value=0,
+            max_value=200,
+            value=soil["P"],
+        )
 
-        st.warning("Please enter a valid location.")
+        K = st.number_input(
+            "Potassium (K)",
+            min_value=0,
+            max_value=200,
+            value=soil["K"],
+        )
+
+        ph = st.number_input(
+            "Soil pH",
+            min_value=0.0,
+            max_value=14.0,
+            value=float(soil["ph"]),
+        )
 
     else:
 
-        with st.spinner("Fetching live weather data..."):
+        N = st.number_input("Nitrogen (N)", 0, 200, 40)
+        P = st.number_input("Phosphorus (P)", 0, 200, 40)
+        K = st.number_input("Potassium (K)", 0, 200, 40)
+        ph = st.number_input("Soil pH", 0.0, 14.0, 7.0)
 
-            weather = fetch_weather(location)
+predict = st.button("Predict Optimal Crop")
 
-        if weather:
+# ---------------------------------------------------
+# Prediction
+# ---------------------------------------------------
 
-            temp, humidity, rainfall = weather
+if predict:
 
-            soil = get_soil_data(
-                temp,
-                humidity,
-                rainfall
-            )
+    if not location.strip():
+        st.warning("Please enter a valid location.")
+        st.stop()
 
-            # ---------------------------------------------------
-            # SOIL VALUES
-            # ---------------------------------------------------
-            if use_manual:
+    weather = fetch_weather(location)
 
-                st.subheader("Soil Parameters")
+    if weather:
 
-                col3, col4 = st.columns(2)
+        temp, humidity, rainfall = weather
 
-                with col3:
+        # Weather Card
+        st.markdown(
+            f"""
+            <div class="weather-card">
 
-                    N = st.number_input(
-                        "Nitrogen",
-                        0,
-                        200,
-                        soil["N"]
-                    )
-
-                    P = st.number_input(
-                        "Phosphorus",
-                        0,
-                        200,
-                        soil["P"]
-                    )
-
-                with col4:
-
-                    K = st.number_input(
-                        "Potassium",
-                        0,
-                        200,
-                        soil["K"]
-                    )
-
-                    ph = st.number_input(
-                        "Soil pH",
-                        0.0,
-                        14.0,
-                        soil["ph"]
-                    )
-
-            else:
-
-                N = soil["N"]
-                P = soil["P"]
-                K = soil["K"]
-                ph = soil["ph"]
-
-            # ---------------------------------------------------
-            # WEATHER CARD
-            # ---------------------------------------------------
-            st.markdown(f"""
-            <div class="card">
-
-            <h3 style="text-align:center;">
-            Live Environmental Data
+            <h3 style="text-align:center;color:#1b4332;">
+            Live Weather Data
             </h3>
 
             <div class="weather-grid">
 
-                <div class="weather-box">
-                    <div class="weather-value">
-                    {temp}°C
-                    </div>
-                    <div class="weather-label">
-                    Temperature
-                    </div>
-                </div>
+            <div class="weather-box">
+            <div class="weather-value">{temp} °C</div>
+            <div class="weather-label">Temperature</div>
+            </div>
 
-                <div class="weather-box">
-                    <div class="weather-value">
-                    {humidity}%
-                    </div>
-                    <div class="weather-label">
-                    Humidity
-                    </div>
-                </div>
+            <div class="weather-box">
+            <div class="weather-value">{humidity} %</div>
+            <div class="weather-label">Humidity</div>
+            </div>
 
-                <div class="weather-box">
-                    <div class="weather-value">
-                    {rainfall} mm
-                    </div>
-                    <div class="weather-label">
-                    Rainfall
-                    </div>
-                </div>
+            <div class="weather-box">
+            <div class="weather-value">{rainfall} mm</div>
+            <div class="weather-label">Rainfall</div>
+            </div>
 
             </div>
 
             </div>
-            """, unsafe_allow_html=True)
+            """,
+            unsafe_allow_html=True,
+        )
 
-            # ---------------------------------------------------
-            # CROP PREDICTION
-            # ---------------------------------------------------
-            crop_input = np.array([[
-                N,
-                P,
-                K,
-                temp,
-                humidity,
-                ph,
-                rainfall
-            ]])
+    else:
 
-            crop_probs = crop_model.predict_proba(crop_input)[0]
+        st.warning("Using fallback weather values.")
 
-            top3_idx = np.argsort(crop_probs)[-3:][::-1]
+        temp = 25
+        humidity = 60
+        rainfall = 100
 
-            top3_crops = crop_encoder.inverse_transform(top3_idx)
+    # ---------------------------------------------------
+    # Crop Prediction
+    # ---------------------------------------------------
 
-            top3_conf = crop_probs[top3_idx]
+    crop_input = np.array(
+        [[N, P, K, temp, humidity, ph, rainfall]]
+    )
 
-            st.subheader("Recommended Crops")
+    crop_probs = crop_model.predict_proba(crop_input)[0]
 
-            for crop, conf in zip(top3_crops, top3_conf):
+    top3_idx = np.argsort(crop_probs)[-3:][::-1]
 
-                st.write(
-                    f"{crop} — {conf * 100:.2f}% confidence"
-                )
+    top3_crops = crop_encoder.inverse_transform(top3_idx)
 
-                st.progress(float(conf))
+    top3_conf = crop_probs[top3_idx]
 
-            # ---------------------------------------------------
-            # FERTILIZER PREDICTION
-            # ---------------------------------------------------
-            crop_encoded = fert_crop_encoder.transform(
-                [top3_crops[0]]
-            )[0]
+    st.subheader("Top Crop Recommendations")
 
-            fert_input = np.array([[
-                N,
-                P,
-                K,
-                temp,
-                humidity,
-                rainfall,
-                crop_encoded
-            ]])
+    for crop, conf in zip(top3_crops, top3_conf):
 
-            fert_probs = fert_model.predict_proba(
-                fert_input
-            )[0]
+        st.progress(float(conf))
 
-            fert_idx = np.argmax(fert_probs)
+        st.write(
+            f"**{crop} — {conf * 100:.2f}% confidence**"
+        )
 
-            fert_label = fert_encoder.inverse_transform(
-                [fert_idx]
-            )[0]
+    # ---------------------------------------------------
+    # Fertilizer Prediction
+    # ---------------------------------------------------
 
-            fert_conf = fert_probs[fert_idx]
+    crop_encoded = fert_crop_encoder.transform(
+        [top3_crops[0]]
+    )[0]
 
-            st.subheader("Recommended Fertilizer")
+    fert_input = np.array(
+        [[
+            N,
+            P,
+            K,
+            temp,
+            humidity,
+            rainfall,
+            crop_encoded
+        ]]
+    )
 
-            st.success(
-                f"{fert_label} — "
-                f"{fert_conf * 100:.2f}% confidence"
-            )
+    fert_probs = fert_model.predict_proba(fert_input)[0]
 
-            # ---------------------------------------------------
-            # FEATURE IMPORTANCE
-            # ---------------------------------------------------
-            st.subheader("Feature Importance")
+    fert_idx = np.argmax(fert_probs)
 
-            importances = (
-                crop_model
-                .calibrated_classifiers_[0]
-                .estimator
-                .feature_importances_
-            )
+    fert_label = fert_encoder.inverse_transform(
+        [fert_idx]
+    )[0]
 
-            importance_df = pd.DataFrame({
+    fert_conf = fert_probs[fert_idx]
+
+    st.subheader("Recommended Fertilizer")
+
+    st.success(
+        f"{fert_label} — {fert_conf * 100:.2f}% confidence"
+    )
+
+    # ---------------------------------------------------
+    # Feature Importance
+    # ---------------------------------------------------
+
+    st.subheader("Feature Importance")
+
+    try:
+
+        importances = (
+            crop_model.calibrated_classifiers_[0]
+            .estimator.feature_importances_
+        )
+
+        importance_df = pd.DataFrame(
+            {
                 "Feature": metadata["crop_features"],
-                "Importance": importances
-            })
+                "Importance": importances,
+            }
+        ).sort_values(
+            by="Importance",
+            ascending=False
+        )
 
-            importance_df = importance_df.sort_values(
-                by="Importance",
-                ascending=False
-            )
+        fig = px.bar(
+            importance_df,
+            x="Feature",
+            y="Importance",
+            color="Importance",
+        )
 
-            fig = px.bar(
-                importance_df,
-                x="Feature",
-                y="Importance",
-                color="Importance"
-            )
+        st.plotly_chart(
+            fig,
+            use_container_width=True
+        )
 
-            st.plotly_chart(
-                fig,
-                width="stretch"
-            )
+    except Exception as e:
 
-        else:
-
-            st.error(
-                "Unable to fetch weather data for this location."
-            )
+        st.warning(
+            f"Feature importance unavailable: {e}"
+        )
 
 # ---------------------------------------------------
-# FOOTER
+# Footer
 # ---------------------------------------------------
+
 st.divider()
 
 st.caption(
-    "AgriIntel AI • Machine Learning Based "
-    "Agricultural Recommendation System"
+    "AgriIntel AI • Crop and Fertilizer Recommendation System • Powered by Machine Learning"
 )
