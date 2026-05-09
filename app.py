@@ -1,22 +1,4 @@
 import streamlit as st
-
-# Authentication
-# -------------------------
-
-query_params = st.query_params
-
-token = query_params.get("token")
-
-if token != "abc123":
-
-    st.error("Unauthorized Access")
-
-    st.stop()
-
-# -------------------------
-# Imports
-# -------------------------
-
 import joblib
 import numpy as np
 import pandas as pd
